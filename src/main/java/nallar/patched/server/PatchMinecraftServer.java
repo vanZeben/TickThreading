@@ -528,7 +528,7 @@ public abstract class PatchMinecraftServer extends MinecraftServer {
 				if (tickCount % 14 == 0) {
 					exceptionCount.put(id, 0);
 				}
-				if (tickCount % TickThreading.instance.saveInterval == 0) {
+				if (TickThreading.instance.saveInterval > 0 && tickCount % TickThreading.instance.saveInterval == 0) {
 					theProfiler.startSection("save");
 					try {
 						currentlySaving.getAndIncrement();
