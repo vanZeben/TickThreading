@@ -63,7 +63,7 @@ public abstract class ThreadedChunkProvider extends ChunkProviderServer implemen
 	}
 
 	private static final Runnable doNothingRunnable = new DoNothingRunnable();
-	private static final int populationRange = 1;
+	private static final int populationRange = Integer.parseInt(System.getProperty("chunkPopulationRange", "2"));
 	private final NonBlockingHashMapLong<AtomicInteger> chunkLoadLocks = new NonBlockingHashMapLong<AtomicInteger>();
 	private final LongHashMap chunks = new LongHashMap();
 	private final LongHashMap loadingChunks = new LongHashMap();
@@ -87,6 +87,7 @@ public abstract class ThreadedChunkProvider extends ChunkProviderServer implemen
 	public Set<Long> chunksToUnload;
 	public final List<Chunk> loadedChunks;
 	public final IChunkLoader currentChunkLoader;
+	public final LongHashMap loadedChunkHashMap = chunks;
 	@SuppressWarnings("UnusedDeclaration")
 	public boolean loadChunkOnProvideRequest;
 

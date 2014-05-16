@@ -113,20 +113,9 @@
 			</replaceMethod>
 		</class>
 	</theWarOnLogSpam>
-	<tickthreading>
-		<class id="nallar.tickthreading.minecraft.tickregion.TileEntityTickRegion">
-			<lockToSynchronized>doTick</lockToSynchronized>
-		</class>
-		<class id="nallar.tickthreading.minecraft.TickManager">
-			<lockToSynchronized>unlock,lock</lockToSynchronized>
-		</class>
-	</tickthreading>
 	<minecraftCommon>
 		<class id="net.minecraft.logging.LogAgent">
 			<insertAfter code="{ nallar.log.PatchLog.coloriseLogger(); }">setupLogger</insertAfter>
-		</class>
-		<class id="net.minecraft.tileentity.TileEntityChest">
-			<addAll fromClass="nallar.patched.PatchTileEntityNoLock"/>
 		</class>
 		<class id="net.minecraft.world.SpawnerAnimals" env="forge">
 			<addAll fromClass="nallar.patched.PatchSpawnerAnimalsForge"/>
@@ -349,8 +338,9 @@
 			<final field="entityLists"/>
 			<final field="worldObj"/>
 			<final field="chunkTileEntityMap"/>
+			<final field="tileMap"/>
 			<volatile field="isTerrainPopulated"/>
-			<replaceInitializer field="chunkTileEntityMap" class="java.util.concurrent.ConcurrentHashMap"/>
+			<replaceInitializer field="chunkTileEntityMap" class="nallar.collections.CHashMap"/>
 			<!--
 			Used to debug when mods are setting chunk.isModified when they shouldn't - for example, GregTech sets every chunk with a gregtech machine in as modified
 			every tick. :(
@@ -621,6 +611,9 @@
 			</replaceMethod>
 			<removeUntilOpcode opcode="return" index="1">initDimension</removeUntilOpcode>
 		</class>
+		<class id="net.minecraft.pathfinding.PathNavigate">
+			<synchronize>setPath,onUpdateNavigation</synchronize>
+		</class>
 	</minecraftCommon>
 	<bukkit>
 		<class id="org.bukkit.plugin.SimplePluginManager">
@@ -708,6 +701,9 @@
 	<spigot>
 		<class id="org.spigotmc.WatchdogThread">
 			<disable>run</disable>
+		</class>
+		<class id="org.spigotmc.CustomTimingsHandler">
+			<replaceInitializer field="ALL_HANDLERS" class="nallar.collections.SynchronizedSet"/>
 		</class>
 	</spigot>
 	<forge>
@@ -852,60 +848,36 @@
 		</class>
 	</thermalExpansionPlugins>
 	<thermalExpansionTransport>
-		<class id="thermalexpansion.block.conduit.TileConduitEnergy">
+		<class id="thermalexpansion.part.conduit.GridFormer">
 			<newField field="tickLock" class="java.lang.Object" static=""/>
-			<synchronize field="tickLock">updateGridIfNull</synchronize>
+			<synchronize field="tickLock">setup</synchronize>
 		</class>
-		<class id="thermalexpansion.block.conduit.TileConduitLiquid">
-			<newField field="tickLock" class="java.lang.Object" static=""/>
-			<synchronize field="tickLock">updateGridIfNull</synchronize>
+		<class id="thermalexpansion.part.conduit.GridTickHandler">
+			<replaceInitializer field="tickingGrids" class="nallar.collections.CLinkedHashSet"/>
+			<replaceInitializer field="tickingGridsToAdd" class="nallar.collections.CLinkedHashSet"/>
+			<replaceInitializer field="tickingGridsToRemove" class="nallar.collections.CLinkedHashSet"/>
+			<replaceInitializer field="tickConduit" class="nallar.collections.CLinkedHashSet"/>
+			<replaceInitializer field="tickConduitToAdd" class="nallar.collections.CLinkedHashSet"/>
 		</class>
-		<class id="thermalexpansion.block.conduit.GridLiquid">
-			<synchronize>
-				transferLiquid,removeNode,removeConduit,setNewGrid,changeMode,increaseTracker,addNode,addConduit
-			</synchronize>
-			<replaceMethod code="{
-				int n = this.conduitList.size() + this.outputList.size() + this.inputList.size();
-				if (n &lt; 1) {
-					n = 1;
+		<class id="thermalexpansion.part.conduit.fluid.GridFluid">
+			<final field="worldObj"/>
+			<insertAfter code="{
+				if (worldObj == null) {
+					throw new RuntimeException(&quot;Null worldObj in GridFluid construction from &quot; + String.valueOf($1));
 				}
-				int a = getLiquidAmount();
-				return isFirst($1) ? (a / n + a % n) : (a / n);
-			}">getSharedAmount
-			</replaceMethod>
+			}"/>
+			<insertAfter code="{
+				if (worldObj.unloaded) {
+					thermalexpansion.part.conduit.GridTickHandler.tickingGridsToRemove.add(this);
+					System.err.println(&quot;Grid in unloaded world &quot; + worldObj + String.valueOf(this));
+				}
+			}">doGridUpdate</insertAfter>
+			<synchronize/>
 		</class>
-		<class id="thermalexpansion.block.conduit.GridEnergy">
-			<synchronize>
-				transferEnergy,removeNode,removeConduit,setNewGrid,changeMode,increaseTracker,addNode,addConduit
-			</synchronize>
+		<class id="thermalexpansion.part.conduit.energy.GridEnergy">
+			<synchronize/>
 		</class>
 	</thermalExpansionTransport>
-	<thremalExpansionFactory>
-		<class id="thermalexpansion.block.device.TileTankPortable">
-			<replaceMethod code="{
-				if (this.myTank.getLiquidAmount() &lt;= 0) {
-					return;
-				}
-
-				int[] coords = cofh.util.BlockUtils.getAdjacentCoordinatesForSide(this.^field:TileEntity/xCoord^, this.^field:TileEntity/yCoord^, this.^field:TileEntity/zCoord^, 0);
-
-				^class:TileEntity^ theTile = this.^field:TileEntity/worldObj^.^method:World/getBlockTileEntity^(coords[0], coords[1], coords[2]);
-				if (theTile instanceof net.minecraftforge.liquids.ITankContainer) {
-					if (theTile instanceof thermalexpansion.block.device.TileTankPortable &amp;&amp;
-							!((((thermalexpansion.block.device.TileTankPortable)theTile).myTank.getLiquidID() &lt;= 0) ||
-							(((thermalexpansion.block.device.TileTankPortable)theTile).myTank.getLiquidAmount() != 8000))) {
-						return;
-					}
-					int fillQty = Math.min(this.myTank.getLiquidAmount(), 250);
-					int quantity = ((net.minecraftforge.liquids.ITankContainer)theTile).fill(net.minecraftforge.common.ForgeDirection.UP, new net.minecraftforge.liquids.LiquidStack(this.myTank.getLiquidID(), fillQty, this.myTank.getLiquidMeta()), true);
-					if (quantity &gt; 0) {
-						this.myTank.drain(quantity, true);
-					}
-				}
-			}">transferLiquid
-			</replaceMethod>
-		</class>
-	</thremalExpansionFactory>
 	<industrialCraft>
 		<class id="ic2.core.IC2">
 			<synchronize>addSingleTickCallback</synchronize>
@@ -1373,6 +1345,27 @@
 		<class id="appeng.me.CellInventory">
 			<synchronize>^all^</synchronize>
 		</class>
+		<class id="appeng.me.MEInventoryNetwork">
+			<newField class="nallar.tickthreading.util.LinkedListThreadLocal" field="depthsThreadLocal"/>
+			<!-- I know that's not how you spell recursion, typos kept from AE :P -->
+			<replaceMethod code="{
+				Object grid = $1.getGrid();
+				LinkedList depths = (LinkedList) depthsThreadLocal.get();
+				for (Iterator i$ = depths.iterator(); i$.hasNext(); ) {
+					if (grid == i$.next()) {
+						return false;
+					}
+				}
+				depths.push(grid);
+				return true;
+			}">checkRecurrsion</replaceMethod>
+			<replaceMethod code="{
+				Object grid = $1.getGrid();
+				if ($1.getGrid() != ((LinkedList) depthsThreadLocal.get()).pop()) {
+					throw new RuntimeException(&quot;Invalid Network Recussion Detected&quot;);
+				}
+			}">endRecurssion</replaceMethod>
+		</class>
 		<class id="appeng.util.Platform">
 			<insertBefore code="{
 				if ($1 == $2) {
@@ -1508,6 +1501,10 @@
 		</class>
 	</appliedEnergistics>
 	<enderIo>
+		<class id="crazypants.enderio.conduit.AbstractConduitNetwork">
+			<newField field="staticLock" class="java.lang.Object" static=""/>
+			<synchronize field="staticLock">init</synchronize>
+		</class>
 		<class id="crazypants.enderio.conduit.ConduitNetworkTickHandler">
 			<replaceInitializer field="listeners" class="nallar.collections.SynchronizedList"/>
 			<synchronize field="listeners">tickStart,tickEnd</synchronize>
@@ -1649,8 +1646,8 @@
 	</magicBees>
 	<tagApi>
 		<class id="org.kitteh.tag.TagAPI">
-			<replaceMethodCall method="equals" code="$_ = true;" index="0">getName,check,handlePacket
-			</replaceMethodCall>
+			<!-- Allow TagAPI use off the main thread -->
+			<replaceMethodCall method="equals" code="$_ = true;" index="0">check,getName</replaceMethodCall>
 		</class>
 	</tagApi>
 	<mobHats>
@@ -1764,8 +1761,15 @@
 		</class>
 	</canUpdateFixes>
 	<Reika>
+		<class id="com.xcompwiz.mystcraft.world.AgeController">
+			<synchronize>getInstabilityController</synchronize>
+			<public>getInstabilityController</public>
+		</class>
 		<class id="Reika.DragonAPI.ModInteract.ReikaMystcraftHelper$InstabilityInterface">
 			<insertAfter code="{
+				if (instabilityController == null) {
+					instabilityController = ((com.xcompwiz.mystcraft.world.AgeController) ageController).getInstabilityController();
+				}
 				if (ageController == null || instabilityController == null || ageData == null) {
 					throw new IllegalArgumentException(&quot;Null mystcraft age info: &quot; + String.valueOf(ageController) + &quot;, &quot; + String.valueOf(instabilityController) + &quot;, &quot; + String.valueOf(ageData));
 				}

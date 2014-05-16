@@ -18,7 +18,9 @@ public class PatchLauncher {
 	private static void loadPropertiesFromFile(File file) throws IOException {
 		if (!file.exists()) {
 			Files.write(file.toPath(), ("colorLogs=true\r\n" +
-					"serverJar=").getBytes());
+					"serverJar=\r\n" +
+					"chunkPopulationRange=2\r\n" +
+					"fullLoggerName=\r\n").getBytes());
 		}
 		String data = new String(Files.readAllBytes(file.toPath()));
 		data = data.replace("\r\n", "\n");

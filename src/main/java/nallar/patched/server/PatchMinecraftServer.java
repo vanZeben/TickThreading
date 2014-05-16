@@ -229,6 +229,7 @@ public abstract class PatchMinecraftServer extends MinecraftServer {
 			}
 
 			if (!TickThreading.instance.exitOnDeadlock) {
+				DeadLockDetector.tickAhead(999999);
 				try {
 					Thread.sleep(100L);
 				} catch (InterruptedException ignored) {
@@ -294,7 +295,7 @@ public abstract class PatchMinecraftServer extends MinecraftServer {
 		this.updateTimeLightAndEntities();
 
 		int ticks = this.tickCounter;
-		if (ticks % TickThreading.instance.saveInterval == 0) {
+		if (TickThreading.checkSaveInterval(ticks)) {
 			theProfiler.startSection("save");
 			this.serverConfigManager.saveAllPlayerData();
 			theProfiler.endSection();
